@@ -95,7 +95,8 @@ namespace Client
                     GridFrequencyHz = ParseRequiredDouble(values, columnIndexes, "Grid frequency (Hz)", rowIndex, line),
                     GeneratorRpm = ParseRequiredDouble(values, columnIndexes, "Generator RPM (RPM)", rowIndex, line),
                     RowIndex = rowIndex,
-                    TurbineId = turbineId
+                    TurbineId = turbineId,
+                    OriginalLine = line
                 };
 
                 return true;

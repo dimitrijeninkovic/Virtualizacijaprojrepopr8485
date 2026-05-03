@@ -1,5 +1,6 @@
 using Common;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.ServiceModel;
 
@@ -41,11 +42,17 @@ namespace Client
                 Console.WriteLine(startResult.Message);
 
                 int sentRows = 0;
+                string latencyLogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "client-latency.log");
                 foreach (WindTurbineSample sample in reader.ReadSamples())
                 {
                     try
                     {
+                        Stopwatch stopwatch = Stopwatch.StartNew();
                         proxy.PushSample(sample);
+                        stopwatch.Stop();
+                        File.AppendAllText(
+                            latencyLogPath,
+                            $"{DateTime.Now:O}; row={sample.RowIndex}; elapsedMs={stopwatch.ElapsedMilliseconds}{Environment.NewLine}");
                         sentRows++;
                     }
                     catch (FaultException<DataFormatFault> ex)

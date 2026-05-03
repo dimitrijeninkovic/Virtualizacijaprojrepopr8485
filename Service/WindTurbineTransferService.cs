@@ -8,6 +8,7 @@ namespace Service
     {
         private static readonly object LockObject = new object();
         private static SessionMetadata currentSession;
+        private static ServerSessionStorage currentStorage;
         private static int acceptedRows;
         private static int rejectedRows;
 
@@ -27,7 +28,9 @@ namespace Service
 
             lock (LockObject)
             {
+                DisposeStorage();
                 currentSession = metadata;
+                currentStorage = new ServerSessionStorage(metadata);
                 acceptedRows = 0;
                 rejectedRows = 0;
             }
@@ -49,6 +52,7 @@ namespace Service
 
             lock (LockObject)
             {
+                currentStorage.WriteSample(sample);
                 acceptedRows++;
             }
 
@@ -69,6 +73,7 @@ namespace Service
             lock (LockObject)
             {
                 currentSession = null;
+                DisposeStorage();
             }
 
             return result;
@@ -84,31 +89,45 @@ namespace Service
 
             if (sample.Timestamp == default(DateTime))
             {
-                RegisterRejectedRow();
+                RegisterRejectedRow(sample.RowIndex, "Timestamp is not valid.", sample.OriginalLine);
                 throw new FaultException<DataFormatFault>(
                     new DataFormatFault("Timestamp is not valid.", sample.RowIndex));
             }
 
             if (sample.WindSpeed < 0)
             {
-                RegisterRejectedRow();
+                RegisterRejectedRow(sample.RowIndex, "Wind speed must be greater than or equal to zero.", sample.OriginalLine);
                 throw new FaultException<ValidationFault>(
                     new ValidationFault("Wind speed must be greater than or equal to zero.", sample.RowIndex));
             }
 
             if (sample.GridFrequencyHz <= 0)
             {
-                RegisterRejectedRow();
+                RegisterRejectedRow(sample.RowIndex, "Grid frequency must be greater than zero.", sample.OriginalLine);
                 throw new FaultException<ValidationFault>(
                     new ValidationFault("Grid frequency must be greater than zero.", sample.RowIndex));
             }
         }
 
-        private static void RegisterRejectedRow()
+        private static void RegisterRejectedRow(int rowIndex, string reason, string originalLine)
         {
             lock (LockObject)
             {
+                if (currentStorage != null)
+                {
+                    currentStorage.WriteRejectedSample(rowIndex, reason, originalLine);
+                }
+
                 rejectedRows++;
+            }
+        }
+
+        private static void DisposeStorage()
+        {
+            if (currentStorage != null)
+            {
+                currentStorage.Dispose();
+                currentStorage = null;
             }
         }
 
