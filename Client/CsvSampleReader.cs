@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Text;
 
 namespace Client
 {
@@ -60,7 +61,7 @@ namespace Client
 
             for (int i = 0; i < headerColumns.Length; i++)
             {
-                string columnName = headerColumns[i].Trim();
+                string columnName = NormalizeColumnName(headerColumns[i]);
                 if (!indexes.ContainsKey(columnName))
                 {
                     indexes.Add(columnName, i);
@@ -86,8 +87,8 @@ namespace Client
                 {
                     Timestamp = ParseTimestamp(GetValue(values, columnIndexes, "Date and time")),
                     WindSpeed = ParseRequiredDouble(values, columnIndexes, "Wind speed (m/s)", rowIndex, line),
-                    WindDirection = ParseRequiredDouble(values, columnIndexes, "Wind direction (°)", rowIndex, line),
-                    NacellePosition = ParseRequiredDouble(values, columnIndexes, "Nacelle position (°)", rowIndex, line),
+                    WindDirection = ParseRequiredDouble(values, columnIndexes, "Wind direction", rowIndex, line),
+                    NacellePosition = ParseRequiredDouble(values, columnIndexes, "Nacelle position", rowIndex, line),
                     PowerKW = ParseRequiredDouble(values, columnIndexes, "Power (kW)", rowIndex, line),
                     PotentialPowerDefaultKW = ParseRequiredDouble(values, columnIndexes, "Potential power default PC (kW)", rowIndex, line),
                     PowerFactor = ParseRequiredDouble(values, columnIndexes, "Power factor (cosphi)", rowIndex, line),
@@ -169,7 +170,8 @@ namespace Client
         private static string GetValue(string[] values, Dictionary<string, int> columnIndexes, string columnName)
         {
             int index;
-            if (!columnIndexes.TryGetValue(columnName, out index))
+            string normalizedColumnName = NormalizeColumnName(columnName);
+            if (!columnIndexes.TryGetValue(normalizedColumnName, out index))
             {
                 throw new InvalidDataException($"Required column '{columnName}' does not exist.");
             }
@@ -180,6 +182,25 @@ namespace Client
             }
 
             return values[index].Trim();
+        }
+
+        private static string NormalizeColumnName(string columnName)
+        {
+            if (columnName == null)
+            {
+                return string.Empty;
+            }
+
+            StringBuilder builder = new StringBuilder();
+            foreach (char character in columnName.Trim())
+            {
+                if (char.IsLetterOrDigit(character))
+                {
+                    builder.Append(char.ToLowerInvariant(character));
+                }
+            }
+
+            return builder.ToString();
         }
 
         private void LogRejectedRow(int rowIndex, string reason, string originalLine)
