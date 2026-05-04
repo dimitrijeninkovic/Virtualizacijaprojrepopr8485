@@ -1,16 +1,32 @@
 using Common;
 using System;
+using System.Collections.Generic;
 using System.ServiceModel;
 
 namespace Service
 {
     public class WindTurbineTransferService : IWindTurbineTransfer
     {
+        public event EventHandler<TransferEventArgs> OnTransferStarted;
+        public event EventHandler<TransferEventArgs> OnSampleReceived;
+        public event EventHandler<TransferEventArgs> OnTransferCompleted;
+        public event EventHandler<WarningEventArgs> OnWarningRaised;
+
         private static readonly object LockObject = new object();
+        private static readonly TransferConsoleObserver ConsoleObserver = new TransferConsoleObserver();
         private static SessionMetadata currentSession;
         private static ServerSessionStorage currentStorage;
+        private static WindTurbineAnalytics currentAnalytics;
         private static int acceptedRows;
         private static int rejectedRows;
+
+        public WindTurbineTransferService()
+        {
+            OnTransferStarted += ConsoleObserver.HandleTransferStarted;
+            OnSampleReceived += ConsoleObserver.HandleSampleReceived;
+            OnTransferCompleted += ConsoleObserver.HandleTransferCompleted;
+            OnWarningRaised += ConsoleObserver.HandleWarningRaised;
+        }
 
         public TransferSessionResult StartSession(SessionMetadata metadata)
         {
@@ -31,11 +47,13 @@ namespace Service
                 DisposeStorage();
                 currentSession = metadata;
                 currentStorage = new ServerSessionStorage(metadata);
+                currentAnalytics = new WindTurbineAnalytics(AnalyticsThresholds.Load());
                 acceptedRows = 0;
                 rejectedRows = 0;
             }
 
             Console.WriteLine($"Transfer started for {metadata.TurbineId} from {metadata.SourceFileName}");
+            RaiseTransferStarted(metadata);
 
             return CreateResult(true, "Session started.");
         }
@@ -56,10 +74,8 @@ namespace Service
                 acceptedRows++;
             }
 
-            if (acceptedRows % 1000 == 0)
-            {
-                Console.WriteLine($"Transfer in progress. Accepted rows: {acceptedRows}");
-            }
+            RaiseSampleReceived(sample);
+            AnalyzeSample(sample);
 
             return CreateResult(true, "Sample accepted.");
         }
@@ -67,12 +83,14 @@ namespace Service
         public TransferSessionResult EndSession()
         {
             Console.WriteLine($"Transfer completed. Accepted rows: {acceptedRows}, rejected rows: {rejectedRows}");
+            RaiseTransferCompleted();
 
             TransferSessionResult result = CreateResult(true, "Session completed.");
 
             lock (LockObject)
             {
                 currentSession = null;
+                currentAnalytics = null;
                 DisposeStorage();
             }
 
@@ -140,6 +158,36 @@ namespace Service
                 AcceptedRows = acceptedRows,
                 RejectedRows = rejectedRows
             };
+        }
+
+        private void RaiseTransferStarted(SessionMetadata metadata)
+        {
+            OnTransferStarted?.Invoke(this, new TransferEventArgs(metadata, null, acceptedRows));
+        }
+
+        private void RaiseSampleReceived(WindTurbineSample sample)
+        {
+            OnSampleReceived?.Invoke(this, new TransferEventArgs(currentSession, sample, acceptedRows));
+        }
+
+        private void RaiseTransferCompleted()
+        {
+            OnTransferCompleted?.Invoke(this, new TransferEventArgs(currentSession, null, acceptedRows));
+        }
+
+        private void AnalyzeSample(WindTurbineSample sample)
+        {
+            IEnumerable<WarningEventArgs> warnings;
+
+            lock (LockObject)
+            {
+                warnings = currentAnalytics.Analyze(sample);
+            }
+
+            foreach (WarningEventArgs warning in warnings)
+            {
+                OnWarningRaised?.Invoke(this, warning);
+            }
         }
     }
 }
