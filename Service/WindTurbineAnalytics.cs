@@ -94,12 +94,13 @@ namespace Service
                 return;
             }
 
-            if (powerFactor < thresholds.PfMinThreshold)
+            double powerFactorMagnitude = Math.Abs(powerFactor);
+            if (powerFactorMagnitude < thresholds.PfMinThreshold)
             {
                 warnings.Add(new WarningEventArgs(
                     WarningType.LowPowerFactorWarning,
                     sample,
-                    $"Power factor={Format(powerFactor)} is lower than threshold={Format(thresholds.PfMinThreshold)}."));
+                    $"Power factor={Format(powerFactor)} has magnitude={Format(powerFactorMagnitude)}, lower than threshold={Format(thresholds.PfMinThreshold)}."));
             }
         }
 

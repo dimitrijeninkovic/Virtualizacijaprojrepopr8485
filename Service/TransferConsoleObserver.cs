@@ -1,9 +1,13 @@
 using System;
+using System.Globalization;
+using System.IO;
 
 namespace Service
 {
     public class TransferConsoleObserver
     {
+        private int warningCount;
+
         public void HandleTransferStarted(object sender, TransferEventArgs e)
         {
             Console.WriteLine($"[EVENT] Transfer started: turbine={e.Metadata.TurbineId}, file={e.Metadata.SourceFileName}");
@@ -24,7 +28,15 @@ namespace Service
 
         public void HandleWarningRaised(object sender, WarningEventArgs e)
         {
-            Console.WriteLine($"[WARNING] {e.WarningType}: {e.Message}");
+            warningCount++;
+            File.AppendAllText(
+                "server-warnings.log",
+                $"{DateTime.Now.ToString("O", CultureInfo.InvariantCulture)}; row={e.Sample.RowIndex}; type={e.WarningType}; message={e.Message}{Environment.NewLine}");
+
+            if (warningCount <= 10 || warningCount % 500 == 0)
+            {
+                Console.WriteLine($"[WARNING] {e.WarningType}: {e.Message}");
+            }
         }
     }
 }
