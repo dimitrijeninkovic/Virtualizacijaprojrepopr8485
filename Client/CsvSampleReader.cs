@@ -111,7 +111,39 @@ namespace Client
 
         private static string[] SplitCsvLine(string line)
         {
-            return line.Split(',');
+            List<string> values = new List<string>();
+            StringBuilder currentValue = new StringBuilder();
+            bool insideQuotes = false;
+
+            for (int i = 0; i < line.Length; i++)
+            {
+                char character = line[i];
+
+                if (character == '"')
+                {
+                    if (insideQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        currentValue.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        insideQuotes = !insideQuotes;
+                    }
+                }
+                else if (character == ',' && !insideQuotes)
+                {
+                    values.Add(currentValue.ToString());
+                    currentValue.Clear();
+                }
+                else
+                {
+                    currentValue.Append(character);
+                }
+            }
+
+            values.Add(currentValue.ToString());
+            return values.ToArray();
         }
 
         private static DateTime ParseTimestamp(string value)
@@ -174,7 +206,7 @@ namespace Client
 
             if (!columnIndexes.TryGetValue(normalizedColumnName, out index))
             {
-                throw new InvalidDataException($"Required column '{columnName}' does not exist.");
+                index = FindColumnByPrefix(columnIndexes, normalizedColumnName, columnName);
             }
             if (index >= values.Length)
             {
@@ -183,7 +215,18 @@ namespace Client
 
             return values[index].Trim();
         }
+        private static int FindColumnByPrefix(Dictionary<string, int> columnIndexes,string normalizedColumnName,string originalColumnName)
+        {
+            foreach (KeyValuePair<string, int> column in columnIndexes)
+            {
+                if (column.Key.StartsWith(normalizedColumnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return column.Value;
+                }
+            }
 
+            throw new InvalidDataException($"Required column '{originalColumnName}' does not exist.");
+        }
         private static string NormalizeColumnName(string columnName)
         {
             if (columnName == null)
@@ -195,7 +238,7 @@ namespace Client
 
             foreach (char character in columnName.Trim())
             {
-                if (char.IsLetterOrDigit(character))
+                if (character <= 127 && char.IsLetterOrDigit(character))
                 {
                     builder.Append(char.ToLowerInvariant(character));
                 }
